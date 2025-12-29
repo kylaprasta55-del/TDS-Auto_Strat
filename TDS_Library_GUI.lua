@@ -873,6 +873,33 @@ local function CreateGUI()
             _G[globalVar] = not _G[globalVar]
             ToggleButton.Text = _G[globalVar] and "ON" or "OFF"
             ToggleButton.BackgroundColor3 = _G[globalVar] and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+            
+            -- Actually trigger the functions
+            if globalVar == "AutoSkip" then
+                if _G[globalVar] then
+                    start_auto_skip()
+                    print("[TDS] Auto Skip enabled")
+                else
+                    auto_skip_running = false
+                    print("[TDS] Auto Skip disabled")
+                end
+            elseif globalVar == "AutoPickups" then
+                if _G[globalVar] then
+                    start_auto_pickups()
+                    print("[TDS] Auto Pickups enabled")
+                else
+                    auto_pickups_running = false
+                    print("[TDS] Auto Pickups disabled")
+                end
+            elseif globalVar == "AntiLag" then
+                if _G[globalVar] then
+                    start_anti_lag()
+                    print("[TDS] Anti Lag enabled")
+                else
+                    anti_lag_running = false
+                    print("[TDS] Anti Lag disabled")
+                end
+            end
         end)
     end
     
@@ -881,27 +908,36 @@ local function CreateGUI()
     CreateToggle("Anti Lag", 105, "AntiLag")
     
     -- Update stats
+    local matchStartTime = tick()
     task.spawn(function()
         while ScreenGui.Parent do
             local wave = get_current_wave()
             local coins = 0
             local gems = 0
+            local duration = tick() - matchStartTime
             
             pcall(function()
                 coins = local_player.Coins.Value
                 gems = local_player.Gems.Value
             end)
             
+            -- Format duration as MM:SS
+            local minutes = math.floor(duration / 60)
+            local seconds = math.floor(duration % 60)
+            local timeString = string.format("%02d:%02d", minutes, seconds)
+            
             StatsLabel.Text = string.format(
                 "📊 Statistics\n\n" ..
                 "Wave: %d\n" ..
                 "Towers: %d\n" ..
                 "Coins: %d (+%d)\n" ..
-                "Gems: %d (+%d)",
+                "Gems: %d (+%d)\n" ..
+                "Time: %s",
                 wave,
                 #TDS.placed_towers,
                 coins, coins - start_coins,
-                gems, gems - start_gems
+                gems, gems - start_gems,
+                timeString
             )
             
             task.wait(1)
@@ -912,18 +948,76 @@ local function CreateGUI()
 end
 
 -- ═══════════════════════════════════════════════════════════════
---  AUTO-START FEATURES
+--  ENHANCED AUTO FEATURES MANAGEMENT
 -- ═══════════════════════════════════════════════════════════════
 
--- Start auto features
-start_back_to_lobby()
-start_auto_skip()
-start_auto_pickups()
-start_anti_lag()
+function TDS:StartAutoFeatures()
+    print("[TDS] Starting auto features...")
+    
+    -- Always start back to lobby
+    start_back_to_lobby()
+    
+    -- Start auto skip if enabled
+    if _G.AutoSkip then
+        start_auto_skip()
+        print("[TDS] ✅ Auto Skip enabled")
+    end
+    
+    -- Start auto pickups if enabled
+    if _G.AutoPickups then
+        start_auto_pickups()
+        print("[TDS] ✅ Auto Pickups enabled")
+    end
+    
+    -- Start anti lag if enabled
+    if _G.AntiLag then
+        start_anti_lag()
+        print("[TDS] ✅ Anti Lag enabled")
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════
+--  STRATEGY EXECUTION WRAPPER
+-- ═══════════════════════════════════════════════════════════════
+
+function TDS:ExecuteStrategy(strategyFunction)
+    print("[TDS] Executing strategy...")
+    
+    -- Wait for game to be ready
+    if game_state == "LOBBY" then
+        -- Wait for join game
+        print("[TDS] Waiting for game to start...")
+        repeat 
+            task.wait(1) 
+        until player_gui:FindFirstChild("GameGui") or player_gui:FindFirstChild("ReactGameIntermission")
+        
+        task.wait(2) -- Additional wait for game initialization
+    end
+    
+    -- Execute the strategy
+    task.spawn(function()
+        local success, err = pcall(strategyFunction)
+        if not success then
+            warn("[TDS] Strategy error: " .. tostring(err))
+        else
+            print("[TDS] ✅ Strategy completed!")
+        end
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════════════
+--  AUTO-START FEATURES & GUI
+-- ═══════════════════════════════════════════════════════════════
+
+-- Start auto features immediately
+TDS:StartAutoFeatures()
 
 -- Create GUI if AutoStrat is enabled
 if _G.AutoStrat then
-    CreateGUI()
+    task.spawn(function()
+        task.wait(1) -- Small delay for initialization
+        CreateGUI()
+    end)
 end
 
 -- ═══════════════════════════════════════════════════════════════
@@ -933,6 +1027,13 @@ end
 print("═══════════════════════════════════════")
 print("🎮 TDS Auto Strategy Library v" .. TDS.version)
 print("State: " .. game_state)
+print("Auto Skip: " .. tostring(_G.AutoSkip))
+print("Auto Pickups: " .. tostring(_G.AutoPickups))
+print("Anti Lag: " .. tostring(_G.AntiLag))
 print("═══════════════════════════════════════")
+
+-- Share globally
+getgenv().TDS = TDS
+shared.TDS = TDS
 
 return TDS
